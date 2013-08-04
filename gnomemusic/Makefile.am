@@ -8,7 +8,8 @@ app_PYTHON = \
 	mpris.py \
 	toolbar.py \
 	view.py \
-	grilo.py \
+	grilo.py  \
+	playlists.py\
 	query.py \
 	widgets.py \
 	window.py

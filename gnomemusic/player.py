@@ -192,8 +192,13 @@ class Player(GObject.GObject):
         self._sync_prev_next()
 
     def _get_next_track(self):
-        currentTrack = self.playlist.get_iter(self.currentTrack.get_path())
+        if self.currentTrack and self.currentTrack.valid():
+            currentTrack = self.playlist.get_iter(self.currentTrack.get_path())
+        else:
+            currentTrack = None
+
         nextTrack = None
+
         if self.repeat == RepeatType.SONG:
             nextTrack = currentTrack
         elif self.repeat == RepeatType.ALL:
@@ -224,7 +229,11 @@ class Player(GObject.GObject):
         return last
 
     def _get_previous_track(self):
-        currentTrack = self.playlist.get_iter(self.currentTrack.get_path())
+        if self.currentTrack and self.currentTrack.valid():
+            currentTrack = self.playlist.get_iter(self.currentTrack.get_path())
+        else:
+            currentTrack = None
+
         previousTrack = None
 
         if self.repeat == RepeatType.SONG:
@@ -251,18 +260,22 @@ class Player(GObject.GObject):
             return False
         elif self.repeat in [RepeatType.ALL, RepeatType.SONG, RepeatType.SHUFFLE]:
             return True
-        else:
+        elif self.currentTrack.valid():
             tmp = self.playlist.get_iter(self.currentTrack.get_path())
             return self.playlist.iter_next(tmp) is not None
+        else:
+            return True
 
     def has_previous(self):
         if not self.currentTrack:
             return False
         elif self.repeat in [RepeatType.ALL, RepeatType.SONG, RepeatType.SHUFFLE]:
             return True
-        else:
+        elif self.currentTrack.valid():
             tmp = self.playlist.get_iter(self.currentTrack.get_path())
             return self.playlist.iter_previous(tmp) is not None
+        else:
+            return True
 
     def _get_playing(self):
         ok, state, pending = self.player.get_state(0)
@@ -595,7 +608,7 @@ class Player(GObject.GObject):
         self.emit('volume-changed')
 
     def get_current_media(self):
-        if not self.currentTrack:
+        if not self.currentTrack or not self.currentTrack.valid():
             return None
         currentTrack = self.playlist.get_iter(self.currentTrack.get_path())
         return self.playlist.get_value(currentTrack, self.playlistField)

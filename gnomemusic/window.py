@@ -37,7 +37,10 @@ from gnomemusic.toolbar import Toolbar, ToolbarState
 from gnomemusic.player import Player, SelectionToolbar
 from gnomemusic.query import Query
 import gnomemusic.view as Views
+import gnomemusic.widgets as Widgets
+from gnomemusic.playlists import Playlists
 
+playlist = Playlists.get_default()
 tracker = Tracker.SparqlConnection.get(None)
 
 if Gtk.get_minor_version() > 8:
@@ -133,6 +136,9 @@ class Window(Gtk.ApplicationWindow):
             self.views.append(Views.Empty(self.toolbar, self.player))
             self._stack.add_titled(self.views[0], _("Empty"), _("Empty"))
 
+        self.selection_toolbar._add_to_playlist_button.connect(
+            'clicked', self._on_add_to_playlist_button_clicked)
+
         self.toolbar.set_state(ToolbarState.ALBUMS)
         self.toolbar.header_bar.show()
         self.player.eventBox.show_all()
@@ -151,3 +157,12 @@ class Window(Gtk.ApplicationWindow):
 
     def _toggle_view(self, btn, i):
         self._stack.set_visible_child(self.views[i])
+
+    def _on_add_to_playlist_button_clicked(self, widget):
+        self.playlists = Widgets.PlaylistDialog()
+        if self.playlists.dialog_box.run() == Gtk.ResponseType.ACCEPT:
+            playlist.add_to_playlist(
+                self.playlists.get_selected(),
+                self._stack.get_visible_child().get_selected_track_uris())
+        self.toolbar.set_selection_mode(False)
+        self.playlists.dialog_box.destroy()

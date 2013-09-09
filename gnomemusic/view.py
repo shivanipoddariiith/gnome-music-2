@@ -61,6 +61,7 @@ class ViewContainer(Stack):
     errorIconName = 'dialog-error-symbolic'
     starIconName = 'starred-symbolic'
     countQuery = None
+    filter = None
 
     def __init__(self, title, header_bar, selection_toolbar, useStack=False):
         Stack.__init__(self,
@@ -90,6 +91,8 @@ class ViewContainer(Stack):
         )
         self.view.set_view_type(Gd.MainViewType.ICON)
         self.view.set_model(self._model)
+        self.filter = self._model.filter_new(None)
+        self.view.set_model(self.filter)
         self.vadjustment = self.view.get_vadjustment()
         self.selection_toolbar = selection_toolbar
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -226,15 +229,23 @@ class ViewContainer(Stack):
         title = albumArtCache.get_media_title(item)
         item.set_title(title)
 
-        icon_name = self.nowPlayingIconName
-        _iter = self._model.insert_with_valuesv(
-            -1,
-            [0, 1, 2, 3, 4, 5, 7, 8, 9, 10],
-            [str(item.get_id()), '', title,
-             artist, self._symbolicIcon, item,
-             -1, icon_name, False, False])
-        self.player.discover_item(item, self._on_discovered, _iter)
-        GLib.idle_add(self._update_album_art, item, _iter)
+        def add_new_item():
+            _iter = self._model.append(None)
+            icon_name = self.nowPlayingIconName
+            if item.get_url():
+                try:
+                    self.player.discoverer.discover_uri(item.get_url())
+                except:
+                    print('failed to discover url ' + item.get_url())
+                    icon_name = self.errorIconName
+            self._model.set(_iter,
+                            [0, 1, 2, 3, 4, 5, 7, 8, 9, 10],
+                            [str(item.get_id()), '', title,
+                             artist, self._symbolicIcon, item,
+                             -1, icon_name, False, icon_name == self.errorIconName])
+            GLib.idle_add(self._update_album_art, item, _iter)
+
+        GLib.idle_add(add_new_item)
 
     def _insert_album_art(self, item, cb_item, itr, x=False):
         if item and cb_item and not item.get_thumbnail():
@@ -295,7 +306,8 @@ class Albums(ViewContainer):
         self.set_visible_child(self._grid)
 
     def _on_item_activated(self, widget, id, path):
-        _iter = self._model.get_iter(path)
+        child_path = self.filter.convert_path_to_child_path(path)
+        _iter = self._model.get_iter(child_path)
         title = self._model.get_value(_iter, 2)
         artist = self._model.get_value(_iter, 3)
         item = self._model.get_value(_iter, 5)
@@ -333,20 +345,22 @@ class Songs(ViewContainer):
         self.player.connect('playlist-item-changed', self.update_model)
 
     def _on_item_activated(self, widget, id, path):
-        _iter = self._model.get_iter(path)
-        if self._model.get_value(_iter, 8) != self.errorIconName:
-            self.player.set_playlist('Songs', None, self._model, _iter, 5)
+        _iter = self.filter.get_iter(path)
+        child_iter = self.filter.convert_iter_to_child_iter(_iter)
+        if self._model.get_value(child_iter, 8) != self.errorIconName:
+            self.player.set_playlist('Songs', None, self.filter, _iter, 5)
             self.player.set_playing(True)
 
     def update_model(self, player, playlist, currentIter):
         if self.iter_to_clean:
             self._model.set_value(self.iter_to_clean, 10, False)
-        if playlist != self._model:
+        if playlist != self.filter:
             return False
 
-        self._model.set_value(currentIter, 10, True)
-        if self._model.get_value(currentIter, 8) != self.errorIconName:
-            self.iter_to_clean = currentIter.copy()
+        child_iter = self.filter.convert_iter_to_child_iter(currentIter)
+        self._model.set_value(child_iter, 10, True)
+        if self._model.get_value(child_iter, 8) != self.errorIconName:
+            self.iter_to_clean = child_iter.copy()
         return False
 
     def _add_item(self, source, param, item):
@@ -541,7 +555,8 @@ class Artists (ViewContainer):
         )
         child_name = "artists_%i" % self.artists_counter
         self.artistAlbumsStack.add_named(self.new_artistAlbumsWidget, child_name)
-        _iter = self._model.get_iter(path)
+        child_path = self.filter.convert_path_to_child_path(path)
+        _iter = self._model.get_iter(child_path)
         self._last_selection = _iter
         artist = self._model.get_value(_iter, 2)
         albums = self._artists[artist.lower()]['albums']

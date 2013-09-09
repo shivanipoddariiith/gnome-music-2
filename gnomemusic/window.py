@@ -30,7 +30,7 @@
 # delete this exception statement from your version.
 
 
-from gi.repository import Gtk, Gio, GLib, Tracker
+from gi.repository import Gtk, Gdk, Gio, GLib, Tracker
 from gettext import gettext as _
 
 from gnomemusic.toolbar import Toolbar, ToolbarState
@@ -47,6 +47,7 @@ else:
 
 
 class Window(Gtk.ApplicationWindow):
+
     def __init__(self, app):
         Gtk.ApplicationWindow.__init__(self,
                                        application=app,
@@ -105,6 +106,7 @@ class Window(Gtk.ApplicationWindow):
         else:
             self._box.pack_start(self.toolbar.header_bar, False, False, 0)
             self.set_hide_titlebar_when_maximized(True)
+        self._box.pack_start(self.toolbar.searchbar, False, False, 0)
         self._box.pack_start(self._stack, True, True, 0)
         self._box.pack_start(self.player.eventBox, False, False, 0)
         self._box.pack_start(self.selection_toolbar.eventbox, False, False, 0)
@@ -123,9 +125,11 @@ class Window(Gtk.ApplicationWindow):
                 self._stack.add_titled(i, i.title, i.title)
 
             self.toolbar.set_stack(self._stack)
+            self.toolbar.searchbar.show()
 
             self._on_notify_model_id = self._stack.connect('notify::visible-child', self._on_notify_mode)
             self.connect('destroy', self._notify_mode_disconnect)
+            self.connect('key_press_event', self._on_key_press)
 
             self.views[0].populate()
         #To revert to the No Music View when no songs are found
@@ -133,11 +137,21 @@ class Window(Gtk.ApplicationWindow):
             self.views.append(Views.Empty(self.toolbar, self.player))
             self._stack.add_titled(self.views[0], _("Empty"), _("Empty"))
 
+        self.toolbar._search_button.connect('toggled', self._on_search_toggled)
+
         self.toolbar.set_state(ToolbarState.ALBUMS)
         self.toolbar.header_bar.show()
         self.player.eventBox.show_all()
         self._box.show()
         self.show()
+
+    def _on_key_press(self, widget, event):
+        modifiers = Gtk.accelerator_get_default_mod_mask()
+        if (event.keyval == Gdk.KEY_f and
+                (event.state & modifiers) == Gdk.ModifierType.CONTROL_MASK):
+            self._show_searchbar(not self.toolbar.searchbar.get_child_revealed())
+        elif (event.keyval == Gdk.KEY_Escape and (event.state & modifiers) == 0):
+            self._show_searchbar(False)
 
     def _notify_mode_disconnect(self, data=None):
         self._stack.disconnect(self._on_notify_model_id)
@@ -147,6 +161,18 @@ class Window(Gtk.ApplicationWindow):
         if stack.get_visible_child() == self.views[1]:
             stack.get_visible_child().stack.set_visible_child_name('dummy')
             stack.get_visible_child().stack.set_visible_child_name('artists')
+        self._show_searchbar(False)
 
     def _toggle_view(self, btn, i):
         self._stack.set_visible_child(self.views[i])
+
+    def _on_search_toggled(self, button, data=None):
+        self._show_searchbar(button.get_active())
+
+    def _show_searchbar(self, show):
+        self.toolbar.searchbar.set_reveal_child(show)
+        self.toolbar._search_button.set_active(show)
+        if show:
+            self.toolbar.searchbar._search_entry.grab_focus()
+        else:
+            self.toolbar.searchbar._search_entry.set_text('')

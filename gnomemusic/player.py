@@ -59,7 +59,7 @@ class Player(GObject.GObject):
 
     __gsignals__ = {
         'playing-changed': (GObject.SIGNAL_RUN_FIRST, None, ()),
-        'playlist-item-changed': (GObject.SIGNAL_RUN_FIRST, None, (Gtk.ListStore, Gtk.TreeIter)),
+        'playlist-item-changed': (GObject.SIGNAL_RUN_FIRST, None, (Gtk.TreeModel, Gtk.TreeIter)),
         'current-changed': (GObject.SIGNAL_RUN_FIRST, None, ()),
         'playback-status-changed': (GObject.SIGNAL_RUN_FIRST, None, ()),
         'repeat-mode-changed': (GObject.SIGNAL_RUN_FIRST, None, ()),
@@ -191,16 +191,26 @@ class Player(GObject.GObject):
         self._sync_prev_next()
 
     def _get_next_track(self):
-        currentTrack = self.playlist.get_iter(self.currentTrack.get_path())
+        if self.currentTrack and self.currentTrack.valid():
+            currentTrack = self.playlist.get_iter(self.currentTrack.get_path())
+        else:
+            currentTrack = None
+
         nextTrack = None
+
         if self.repeat == RepeatType.SONG:
-            nextTrack = currentTrack
+            if currentTrack:
+                nextTrack = currentTrack
+            else:
+                nextTrack = self.playlist.get_iter_first()
         elif self.repeat == RepeatType.ALL:
-            nextTrack = self.playlist.iter_next(currentTrack)
-            if nextTrack is None:
+            if currentTrack:
+                nextTrack = self.playlist.iter_next(currentTrack)
+            if not nextTrack:
                 nextTrack = self.playlist.get_iter_first()
         elif self.repeat == RepeatType.NONE:
-            nextTrack = self.playlist.iter_next(currentTrack)
+            if currentTrack:
+                nextTrack = self.playlist.iter_next(currentTrack)
         elif self.repeat == RepeatType.SHUFFLE:
             nextTrack = self.playlist.get_iter_first()
             rows = self.playlist.iter_n_children(None)
@@ -223,17 +233,26 @@ class Player(GObject.GObject):
         return last
 
     def _get_previous_track(self):
-        currentTrack = self.playlist.get_iter(self.currentTrack.get_path())
+        if self.currentTrack and self.currentTrack.valid():
+            currentTrack = self.playlist.get_iter(self.currentTrack.get_path())
+        else:
+            currentTrack = None
+
         previousTrack = None
 
         if self.repeat == RepeatType.SONG:
-            previousTrack = currentTrack
+            if currentTrack:
+                previousTrack = currentTrack
+            else:
+                previousTrack = self.playlist.get_iter_first()
         elif self.repeat == RepeatType.ALL:
-            previousTrack = self.playlist.iter_previous(currentTrack)
-            if previousTrack is None:
+            if currentTrack:
+                previousTrack = self.playlist.iter_previous(currentTrack)
+            if not previousTrack:
                 previousTrack = self._get_iter_last()
         elif self.repeat == RepeatType.NONE:
-            previousTrack = self.playlist.iter_previous(currentTrack)
+            if currentTrack:
+                previousTrack = self.playlist.iter_previous(currentTrack)
         elif self.repeat == RepeatType.SHUFFLE:
             previousTrack = self.playlist.get_iter_first()
             rows = self.playlist.iter_n_children(None)
@@ -246,22 +265,30 @@ class Player(GObject.GObject):
             return None
 
     def has_next(self):
-        if not self.currentTrack:
+        if self.playlist.iter_n_children(None) < 1:
+            return False
+        elif not self.currentTrack:
             return False
         elif self.repeat in [RepeatType.ALL, RepeatType.SONG, RepeatType.SHUFFLE]:
             return True
-        else:
+        elif self.currentTrack.valid():
             tmp = self.playlist.get_iter(self.currentTrack.get_path())
             return self.playlist.iter_next(tmp) is not None
+        else:
+            return True
 
     def has_previous(self):
-        if not self.currentTrack:
+        if self.playlist.iter_n_children(None) < 1:
+            return False
+        elif not self.currentTrack:
             return False
         elif self.repeat in [RepeatType.ALL, RepeatType.SONG, RepeatType.SHUFFLE]:
             return True
-        else:
+        elif self.currentTrack.valid():
             tmp = self.playlist.get_iter(self.currentTrack.get_path())
             return self.playlist.iter_previous(tmp) is not None
+        else:
+            return True
 
     def _get_playing(self):
         ok, state, pending = self.player.get_state(0)
@@ -340,7 +367,11 @@ class Player(GObject.GObject):
         if self.player.get_state(1)[1] != Gst.State.PAUSED:
             self.stop()
 
-        self.load(self.get_current_media())
+        media = self.get_current_media()
+        if not media:
+            return
+
+        self.load(media)
 
         self.player.set_state(Gst.State.PLAYING)
         self._update_position_callback()
@@ -611,7 +642,7 @@ class Player(GObject.GObject):
         self.emit('volume-changed')
 
     def get_current_media(self):
-        if not self.currentTrack:
+        if not self.currentTrack or not self.currentTrack.valid():
             return None
         currentTrack = self.playlist.get_iter(self.currentTrack.get_path())
         return self.playlist.get_value(currentTrack, self.playlistField)

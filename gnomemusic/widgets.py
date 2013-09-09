@@ -107,6 +107,7 @@ class AlbumWidget(Gtk.EventBox):
     tracks = []
     duration = 0
     symbolicIcon = ALBUM_ART_CACHE.make_default_icon(256, 256)
+    filter = None
 
     def __init__(self, player):
         super(Gtk.EventBox, self).__init__()
@@ -141,7 +142,8 @@ class AlbumWidget(Gtk.EventBox):
         self.show_all()
 
     def _on_item_activated(self, widget, id, path):
-        _iter = self.model.get_iter(path)
+        child_path = self.filter.convert_path_to_child_path(path)
+        _iter = self._model.get_iter(child_path)
         if(self.model.get_value(_iter, 7) != ERROR_ICON_NAME):
             if (self.iterToClean and self.player.playlistId == self.album):
                 item = self.model.get_value(self.iterToClean, 5)
@@ -235,7 +237,8 @@ class AlbumWidget(Gtk.EventBox):
             'clicked', self._on_header_cancel_button_clicked)
         self.view.connect('view-selection-changed',
                           self._on_view_selection_changed)
-        self.view.set_model(self.model)
+        self.filter = self.model.filter_new(None)
+        self.view.set_model(self.filter)
         escaped_artist = GLib.markup_escape_text(artist)
         escaped_album = GLib.markup_escape_text(album)
         self.ui.get_object('artist_label').set_markup(escaped_artist)
@@ -246,7 +249,6 @@ class AlbumWidget(Gtk.EventBox):
         else:
             self.ui.get_object('released_label_info').set_text('----')
         self.player.connect('playlist-item-changed', self.update_model)
-        #self.emit('loaded')
 
     def _on_view_selection_changed(self, widget):
         items = self.view.get_selection()
@@ -556,7 +558,7 @@ class ArtistAlbumWidget(Gtk.HBox):
                     int(i % (len(self.tracks) / 2)), 1, 1
                 )
                 track.song_widget = song_widget
-                itr = self.model.append()
+                itr = self.model.append(None)
                 song_widget._iter = itr
                 song_widget.model = self.model
                 song_widget.title = ui.get_object('title')

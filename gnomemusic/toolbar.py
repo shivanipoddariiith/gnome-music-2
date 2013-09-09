@@ -34,6 +34,7 @@ if Gtk.get_minor_version() > 8:
     from gi.repository.Gtk import StackSwitcher
 else:
     from gi.repository.Gd import StackSwitcher
+from gnomemusic.searchbar import Searchbar
 
 
 class ToolbarState:
@@ -58,6 +59,7 @@ class Toolbar(GObject.GObject):
         self._ui = Gtk.Builder()
         self._ui.add_from_resource('/org/gnome/Music/headerbar.ui')
         self.header_bar = self._ui.get_object('header-bar')
+        self.searchbar = Searchbar(self._stack_switcher)
         self._select_button = self._ui.get_object('select-button')
         self._cancel_button = self._ui.get_object('done-button')
         self._back_button = self._ui.get_object('back-button')

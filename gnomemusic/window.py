@@ -37,7 +37,10 @@ from gnomemusic.toolbar import Toolbar, ToolbarState
 from gnomemusic.player import Player, SelectionToolbar
 from gnomemusic.query import Query
 import gnomemusic.view as Views
+import gnomemusic.widgets as Widgets
+from gnomemusic.playlists import Playlists
 
+playlist = Playlists.get_default()
 tracker = Tracker.SparqlConnection.get(None)
 
 if Gtk.get_minor_version() > 8:
@@ -119,7 +122,7 @@ class Window(Gtk.ApplicationWindow):
             self.views.append(Views.Albums(self.toolbar, self.selection_toolbar, self.player))
             self.views.append(Views.Artists(self.toolbar, self.selection_toolbar, self.player))
             self.views.append(Views.Songs(self.toolbar, self.selection_toolbar, self.player))
-            #self.views.append(Views.Playlist(self.toolbar, self.selection_toolbar, self.player))
+            self.views.append(Views.Playlist(self.toolbar, self.selection_toolbar, self.player))
 
             for i in self.views:
                 self._stack.add_titled(i, i.title, i.title)
@@ -138,6 +141,8 @@ class Window(Gtk.ApplicationWindow):
             self._stack.add_titled(self.views[0], _("Empty"), _("Empty"))
 
         self.toolbar._search_button.connect('toggled', self._on_search_toggled)
+        self.selection_toolbar._add_to_playlist_button.connect(
+            'clicked', self._on_add_to_playlist_button_clicked)
 
         self.toolbar.set_state(ToolbarState.ALBUMS)
         self.toolbar.header_bar.show()
@@ -158,9 +163,10 @@ class Window(Gtk.ApplicationWindow):
 
     def _on_notify_mode(self, stack, param):
         #Slide out artist list on switching to artists view
-        if stack.get_visible_child() == self.views[1]:
+        if stack.get_visible_child() == self.views[1] or \
+           stack.get_visible_child() == self.views[3]:
             stack.get_visible_child().stack.set_visible_child_name('dummy')
-            stack.get_visible_child().stack.set_visible_child_name('artists')
+            stack.get_visible_child().stack.set_visible_child_name('sidebar')
         self._show_searchbar(False)
 
     def _toggle_view(self, btn, i):
@@ -176,3 +182,12 @@ class Window(Gtk.ApplicationWindow):
             self.toolbar.searchbar._search_entry.grab_focus()
         else:
             self.toolbar.searchbar._search_entry.set_text('')
+
+    def _on_add_to_playlist_button_clicked(self, widget):
+        self.playlists = Widgets.PlaylistDialog(self)
+        if self.playlists.dialog_box.run() == Gtk.ResponseType.ACCEPT:
+            playlist.add_to_playlist(
+                self.playlists.get_selected(),
+                self._stack.get_visible_child().get_selected_track_uris())
+        self.toolbar.set_selection_mode(False)
+        self.playlists.dialog_box.destroy()

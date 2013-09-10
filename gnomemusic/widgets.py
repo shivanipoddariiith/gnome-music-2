@@ -39,7 +39,9 @@ from gettext import gettext as _
 from gnomemusic.grilo import grilo
 from gnomemusic.query import Query
 from gnomemusic.albumArtCache import AlbumArtCache
+from gnomemusic.playlists import Playlists
 
+playlist = Playlists.get_default()
 tracker = Tracker.SparqlConnection.get(None)
 ALBUM_ART_CACHE = AlbumArtCache.get_default()
 if Gtk.Widget.get_default_direction() is not Gtk.TextDirection.RTL:
@@ -602,3 +604,83 @@ class ArtistAlbumWidget(Gtk.HBox):
         self.player.set_playlist('Artist', self.album,
                                  widget.model, widget._iter, 5)
         self.player.set_playing(True)
+
+
+class PlaylistDialog():
+    def __init__(self, parent):
+        self.ui = Gtk.Builder()
+        self.ui.add_from_resource('/org/gnome/Music/PlaylistDialog.ui')
+        self.dialog_box = self.ui.get_object('dialog1')
+        self.dialog_box.set_transient_for(parent)
+
+        self.view = self.ui.get_object('treeview1')
+        self.selection = self.ui.get_object('treeview-selection1')
+        self._add_list_renderers()
+        self.view.connect('row-activated', self._on_item_activated)
+
+        self.model = self.ui.get_object('liststore1')
+        playlist_names = playlist.get_playlists()
+        self.populate(playlist_names)
+
+        self.title_bar = self.ui.get_object('headerbar1')
+        if Gtk.get_minor_version() > 8:
+            self.dialog_box.set_titlebar(self.title_bar)
+        else:
+            self.dialog_box.get_content_area().add(self.title_bar)
+            self.dialog_box.get_content_area().reorder_child(self.title_bar, 0)
+
+        self._cancel_button = self.ui.get_object('cancel-button')
+        self._select_button = self.ui.get_object('select-button')
+        self._cancel_button.connect('clicked', self._on_cancel_button_clicked)
+        self._select_button.connect('clicked', self._on_selection)
+
+    def get_selected(self):
+        _iter = self.selection.get_selected()[1]
+
+        if not _iter or self.model[_iter][1]:
+            return None
+
+        return self.model[_iter][0]
+
+    def _add_list_renderers(self):
+        cols = Gtk.TreeViewColumn()
+        type_renderer = Gd.StyledTextRenderer(
+            xpad=16,
+            ypad=16,
+            ellipsize=Pango.EllipsizeMode.END,
+            xalign=0.0,
+            width=220
+        )
+        type_renderer.connect('editing-started', self._on_editing_started, None)
+        cols.pack_start(type_renderer, True)
+        cols.add_attribute(type_renderer, "text", 0)
+        cols.add_attribute(type_renderer, "editable", 1)
+        self.view.append_column(cols)
+
+    def populate(self, items):
+        for playlist_name in items:
+            self.model.append([playlist_name, False])
+        add_playlist_iter = self.model.append()
+        self.model.set(add_playlist_iter, [0, 1], [_("New Playlist"), True])
+
+    def _on_selection(self, select_button):
+        self.dialog_box.response(Gtk.ResponseType.ACCEPT)
+
+    def _on_cancel_button_clicked(self, cancel_button):
+        self.dialog_box.response(Gtk.ResponseType.REJECT)
+
+    def _on_item_activated(self, view, path, column):
+        _iter = self.model.get_iter(path)
+        if self.model.get_value(_iter, 1):
+            self.view.set_cursor(path, column, True)
+
+    def _on_editing_started(self, renderer, editable, path, data=None):
+        editable.set_text('')
+        editable.connect('editing-done', self._on_editing_done, None)
+
+    def _on_editing_done(self, editable, data=None):
+        _iter = self.selection.get_selected()[1]
+        if editable.get_text() != '':
+            playlist.create_playlist(editable.get_text())
+            new_iter = self.model.insert_before(_iter)
+            self.model.set(new_iter, [0, 1], [editable.get_text(), False])

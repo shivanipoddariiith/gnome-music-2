@@ -122,15 +122,15 @@ class NotificationManager:
         self._notification.clear_actions()
 
         self._notification.add_action('media-skip-backward', _("Previous"),
-                                      self._go_previous, None)
+                                      self._go_previous, None, None)
         if playing:
             self._notification.add_action('media-playback-pause', _("Pause"),
-                                          self._pause, None)
+                                          self._pause, None, None)
         else:
             self._notification.add_action('media-playback-start', _("Play"),
-                                          self._play, None)
+                                          self._play, None, None)
         self._notification.add_action('media-skip-forward', _("Next"),
-                                      self._go_next, None)
+                                      self._go_next, None, None)
 
     def _go_previous(self, notification, action, data):
         self._player.play_previous()
